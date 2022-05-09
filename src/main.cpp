@@ -115,6 +115,8 @@ void setup() {
     midi.setBaseEP(3);
     midi.begin();
     midi.setBaseEP(3);
+    Serial.println("30 seconds to set up equipment starting now.");
+    // must delay at least 1000!
     delay(30000);
 
     File file = SPIFFS.open("/sonat4.mid", "rb");
