@@ -7,6 +7,96 @@
 
 #include "midiusb.h"
 using namespace sfx;
+
+void dump_midi(stream* stm, const midi_file& file) {
+    Serial.printf("Type: %d\nTimebase: %d\n", (int)file.type, (int)file.timebase);
+    Serial.printf("Tracks: %d\n", (int)file.tracks_size);
+    for (int i = 0; i < (int)file.tracks_size; ++i) {
+        Serial.printf("\tOffset: %d, Size: %d, Preview: ", (int)file.tracks[i].offset, (int)file.tracks[i].size);
+        stm->seek(file.tracks[i].offset);
+        uint8_t buf[16];
+        size_t sz = stm->read(buf, min((int)file.tracks[i].size, 16));
+        for (int j = 0; j < sz; ++j) {
+            Serial.printf("%02x", (int)buf[j]);
+        }
+        Serial.println();
+    }
+}
+void dump_midi(const midi_message& msg) {
+    if((int)msg.type()<=(int)midi_message_type::control_change) {
+        Serial.printf("Channel: %d ",(int)msg.channel());
+    }
+    switch (msg.type()) {
+        case midi_message_type::note_off:
+            Serial.printf("Note Off: %d, %d\n", (int)msg.lsb(), (int)msg.msb());
+            break;
+        case midi_message_type::note_on:
+            Serial.printf("Note On: %d, %d\n", (int)msg.lsb(), (int)msg.msb());
+            break;
+        case midi_message_type::polyphonic_pressure:
+            Serial.printf("Poly pressure: %d, %d\n", (int)msg.lsb(), (int)msg.msb());
+            break;
+        case midi_message_type::control_change:
+            Serial.printf("Control change: %d, %d\n", (int)msg.lsb(), (int)msg.msb());
+            break;
+        case midi_message_type::pitch_wheel_change:
+            Serial.printf("Pitch wheel change: %d, %d\n", (int)msg.lsb(), (int)msg.msb());
+            break;
+        case midi_message_type::song_position:
+            Serial.printf("Song position: %d, %d\n", (int)msg.lsb(), (int)msg.msb());
+            break;
+        case midi_message_type::program_change:
+            Serial.printf("Program change: %d\n", (int)msg.value8);
+            break;
+        case midi_message_type::channel_pressure:
+            Serial.printf("Channel pressure: %d\n", (int)msg.value8);
+            break;
+        case midi_message_type::song_select:
+            Serial.printf("Song select: %d\n", (int)msg.value8);
+            break;
+        case midi_message_type::system_exclusive:
+            Serial.printf("Systex data: Size of %d\n", (int)msg.sysex.size);
+            break;
+        case midi_message_type::reset:
+            if (msg.meta.data == nullptr) {
+                Serial.printf("Reset");
+
+            } else {
+                int32_t result;
+                const uint8_t* p = midi_utility::decode_varlen(msg.meta.encoded_length, &result);
+                if (p != nullptr) {
+                    Serial.printf("Meta message: Type of %02x, Size of %d\n", (int)msg.meta.type, (int)result);
+                } else {
+                    Serial.println("Error reading message");
+                }
+            }
+            break;
+        case midi_message_type::end_system_exclusive:
+            Serial.println("End sysex");
+            break;
+        case midi_message_type::active_sensing:
+            Serial.println("Active sensing");
+            break;
+        case midi_message_type::start_playback:
+            Serial.println("Start playback");
+            break;
+        case midi_message_type::stop_playback:
+            Serial.println("Stop playback");
+            break;
+        case midi_message_type::tune_request:
+            Serial.println("Tune request");
+            break;
+        case midi_message_type::timing_clock:
+            Serial.println("Timing clock");
+            break;
+        default:
+            Serial.printf("Illegal message: %02x\n", (int)msg.status);
+            while (true)
+                ;
+    }
+}
+
+
 using midi_queue = std::queue<midi_stream_event>;
 struct midi_clock_state {
     midi_clock* clock;
@@ -33,7 +123,6 @@ void tick_callback(uint32_t pending, unsigned long long elapsed, void* state) {
                     st->clock->microtempo(mt);
                 }
                 if (event.message.status != 0xFF || event.message.meta.data == nullptr) {
-                    Serial.println("sending message");
                     // send a sysex message
                     if (event.message.type() == midi_message_type::system_exclusive && event.message.sysex.data != nullptr) {
                         uint8_t* p = (uint8_t*)malloc(event.message.sysex.size + 1);
@@ -50,16 +139,19 @@ void tick_callback(uint32_t pending, unsigned long long elapsed, void* state) {
                         if ((int)event.message.type() <= (int)midi_message_type::control_change) {
                             switch (event.message.wire_size()) {
                                 case 1:
-                                    tud_midi_stream_write(event.message.channel(), buf, 1);
+                                    //tud_midi_stream_write(event.message.channel(), buf, 1);
+                                    tud_midi_stream_write(0, buf, 1);
                                     break;
                                 case 2:
                                     buf[1] = event.message.value8;
-                                    tud_midi_stream_write(event.message.channel(), buf, 2);
+                                    //tud_midi_stream_write(event.message.channel(), buf, 2);
+                                    tud_midi_stream_write(0, buf, 2);
                                     break;
                                 case 3:
                                     buf[1] = event.message.lsb();
                                     buf[2] = event.message.msb();
-                                    tud_midi_stream_write(event.message.channel(), buf, 3);
+                                    //tud_midi_stream_write(event.message.channel(), buf, 3);
+                                    tud_midi_stream_write(0, buf, 3);
                                     break;
                                 default:
                                     break;
@@ -115,11 +207,11 @@ void setup() {
     midi.setBaseEP(3);
     midi.begin();
     midi.setBaseEP(3);
-    Serial.println("30 seconds to set up equipment starting now.");
+    Serial.println("10 seconds to set up equipment starting now.");
     // must delay at least 1000!
-    delay(30000);
+    delay(10000);
 
-    File file = SPIFFS.open("/sonat4.mid", "rb");
+    File file = SPIFFS.open("/indaclub.mid", "rb");
     // we use streams as a cross platform way to wrap platform dependent filesystem stuff
     file_stream fstm(file);
     // open the midi file source
@@ -142,7 +234,6 @@ void setup() {
             mclk.update();
             continue;
         }
-        Serial.println("receiving");
         // get the next event
         sfx_result r = msrc.receive(&e);
         if (r != sfx_result::success) {
@@ -160,6 +251,7 @@ void setup() {
             Serial.printf("Error receiving message: %d\n", (int)r);
             break;
         } else {
+            dump_midi(e.message);
             // add the event to the queue
             mqueue.push({(unsigned long long)msrc.elapsed(), e.delta, e.message});
             // pump the clock
