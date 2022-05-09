@@ -117,7 +117,7 @@ void setup() {
     midi.setBaseEP(3);
     delay(30000);
 
-    File file = SPIFFS.open("/bohemian.mid", "rb");
+    File file = SPIFFS.open("/sonat4.mid", "rb");
     // we use streams as a cross platform way to wrap platform dependent filesystem stuff
     file_stream fstm(file);
     // open the midi file source
@@ -149,7 +149,10 @@ void setup() {
                 while(mqueue.size()>0) {
                     mclk.update();
                 }
-                break;
+                mclk.stop();
+                msrc.reset();
+                mclk.start();
+                continue;
                 
             }
             Serial.printf("Error receiving message: %d\n", (int)r);
