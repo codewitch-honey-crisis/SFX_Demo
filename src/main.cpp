@@ -52,6 +52,21 @@ size_t song_buffer_size;
 midi_esptinyusb out;
 int switches[4];
 RingbufHandle_t signal_queue;
+void dump_midi(stream* stm, const midi_file& file) {
+    printf("Type: %d\nTimebase: %d\n", (int)file.type, (int)file.timebase);
+    printf("Tracks: %d\n", (int)file.tracks_size);
+    for (int i = 0; i < (int)file.tracks_size; ++i) {
+        printf("\tOffset: %d, Size: %d, Preview: ", (int)file.tracks[i].offset, (int)file.tracks[i].size);
+        stm->seek(file.tracks[i].offset);
+        uint8_t buf[16];
+        size_t tsz = file.tracks[i].size;
+        size_t sz = stm->read(buf, tsz < 16 ? tsz : 16);
+        for (int j = 0; j < sz; ++j) {
+            printf("%02x", (int)buf[j]);
+        }
+        printf("\n");
+    }
+}
 void setup() {
     pinMode(P_SW1,INPUT_PULLDOWN);
     pinMode(P_SW2,INPUT_PULLDOWN);
@@ -223,6 +238,10 @@ void setup() {
         Serial.printf("Error loading MIDI file: %d\n",(int)r);
         while(true);
     }
+    fs.seek(0);
+    midi_file mf;
+    midi_file::read(&fs,&mf);
+    dump_midi(&fs,mf);
     file.close();
     sampler.output(&out);
     while(true) {

@@ -103,31 +103,31 @@ sfx_result midi_sampler::read(stream* in,midi_sampler* out_sampler,void*(allocat
         return sfx_result::out_of_memory;
     }
     for(int i = 0;i<file.tracks_size;++i) {
-        track *t = tracks+i;
-        *t = track();
-        t->buffer = nullptr;
+        track& t = tracks[i];
+        t = track();
+        t.buffer = nullptr;
     }
     for(int i = 0;i<file.tracks_size;++i) {
-        track *t = tracks+i;
-        midi_track *mt = file.tracks+i;
-        t->buffer = (uint8_t*)allocator(file.tracks[i].size);
-        if(t->buffer==nullptr) {
+        track& t = tracks[i];
+        midi_track& mt = file.tracks[i];
+        t.buffer = (uint8_t*)allocator(mt.size);
+        if(t.buffer==nullptr) {
             res= sfx_result::out_of_memory;
             goto free_all;
         }
         
-        if(mt->offset!=in->seek(mt->offset) || mt->size!=in->read(t->buffer,mt->size)) {
+        if(mt.offset!=in->seek(mt.offset) || mt.size!=in->read(t.buffer,mt.size)) {
             res = sfx_result::io_error;
             goto free_all;
         }
-        t->tempo_multiplier = 1.0;
-        t->base_microtempo = 500000;
-        t->clock.timebase(file.timebase);
-        t->clock.microtempo(500000);
-        t->clock.tick_callback(callback,t);
-        t->buffer_size = mt->size;
-        t->buffer_position = 0;
-        t->output = nullptr;
+        t.tempo_multiplier = 1.0;
+        t.base_microtempo = 500000;
+        t.clock.timebase(file.timebase);
+        t.clock.microtempo(500000);
+        t.clock.tick_callback(callback,&t);
+        t.buffer_size = mt.size;
+        t.buffer_position = 0;
+        t.output = nullptr;
     }
     out_sampler->m_allocator = allocator;
     out_sampler->m_deallocator = deallocator;
@@ -148,8 +148,8 @@ free_all:
 }
 sfx_result midi_sampler::update() {
     for(size_t i = 0;i<m_tracks_size;++i) {
-        track *t = m_tracks + i;
-        t->clock.update();
+        track& t = m_tracks[i];
+        t.clock.update();
     }
     return sfx_result::success;
 }
@@ -162,26 +162,26 @@ sfx_result midi_sampler::start(size_t index) {
     if(0>index || index>=m_tracks_size) {
         return sfx_result::invalid_argument;
     }
-    track *t = m_tracks+index;
+    track& t = m_tracks[index];
     stop(index);
-    t->clock.start();
+    t.clock.start();
     return sfx_result::success;
 }
 sfx_result midi_sampler::stop(size_t index) {
     if(0>index || index>=m_tracks_size) {
         return sfx_result::invalid_argument;
     }
-    track *t = m_tracks+index;
-    t->clock.stop();
-    t->buffer_position = 0;
-    t->event.absolute = 0;
-    t->event.delta = 0;
-    t->event.message.~midi_message();
-    t->event.message.status = 0;
-    t->base_microtempo = 500000;
-    t->clock.microtempo(t->base_microtempo/t->tempo_multiplier);
-    if(t->output!=nullptr) {
-        t->tracker.send_off(*t->output);
+    track& t = m_tracks[index];
+    t.clock.stop();
+    t.buffer_position = 0;
+    t.event.absolute = 0;
+    t.event.delta = 0;
+    t.event.message.~midi_message();
+    t.event.message.status = 0;
+    t.base_microtempo = 500000;
+    t.clock.microtempo(t.base_microtempo/t.tempo_multiplier);
+    if(t.output!=nullptr) {
+        t.tracker.send_off(*t.output);
     }
     return sfx_result::success;
 }
@@ -189,9 +189,9 @@ void midi_sampler::tempo_multiplier(float value) {
     if(value!=value || value==0 || value>5) {
         return;
     }
-    for(int i = 0;i<m_tracks_size;++i) {
-        track *t = m_tracks + i;
-        t->tempo_multiplier = value;
-        t->clock.microtempo(t->base_microtempo/value);
+    for(size_t i = 0;i<m_tracks_size;++i) {
+        track& t = m_tracks[i];
+        t.tempo_multiplier = value;
+        t.clock.microtempo(t.base_microtempo/value);
     }
 }
